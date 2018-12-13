@@ -13,6 +13,7 @@ plt.rcParams['agg.path.chunksize'] = 10000
 import peakutils as peak
 import scipy.signal as signal 
 import scipy.io.wavfile as WAV
+import warnings
 
 
 def get_on_off_peaks(sync_signal, fs, video_fps):
@@ -30,23 +31,21 @@ def get_on_off_peaks(sync_signal, fs, video_fps):
 
         on_off : np.array. The video frame numbers are which the on-off signal is expected to occur. +1 indicates
                  switching on, and -1 indicates switching off. 
-    
+
     '''
     sync = np.float32(sync_signal.copy())
     sync *= 1.0/np.max(sync)
-    # invert the sync signal to get the correct ups and downs : 
-    inv_sync = sync * -1 
     
     # isolate the peaks into positive and negative peaks 
-    pos_invsync = inv_sync.copy()
-    pos_invsync[pos_invsync<0] = 0
-    neg_invsync = inv_sync.copy()
-    neg_invsync[pos_invsync>0] = 0
-    print('Finding peaks')
+    pos_sync = sync.copy()
+    pos_sync[sync<0] = 0
+    neg_sync = sync.copy()
+    neg_sync[sync>0] = 0
     # get indices of positive and negative peaks 
-    pos_peaks = peak.indexes(pos_invsync, 0.5, 1000)
-    neg_peaks = peak.indexes(abs(neg_invsync), 0.5, 1000)
-    
+    min_distance = int(fs*0.07*2) # HARD CODED - CORRECT 
+    pos_peaks = peak.indexes(pos_sync, 0.5, min_distance)
+    neg_peaks = peak.indexes(abs(neg_sync), 0.5, min_distance)
+
     print('calculating indices for video frame rate')
     # calculate indices wrt to video fps 
     pos_peaks_time = pos_peaks/float(fs)
@@ -60,11 +59,27 @@ def get_on_off_peaks(sync_signal, fs, video_fps):
     rec_samples = int(np.around(video_fps*rec_duration))
     print(rec_samples, video_fps, rec_duration)
     on_off = np.zeros(rec_samples)
-    on_off[pospeaks_vidfps] = 1 
-    on_off[negpeaks_vidfps] = -1 
 
-
+    for upslope in pospeaks_vidfps:
+        # get closest downslope in the available array:
+        downslope = get_closest_downslope(upslope, negpeaks_vidfps)
+        if downslope is not None:
+            on_off[upslope:downslope] = 1 
     return(on_off)
+
+def get_closest_downslope(upslope, all_downslopes):
+    '''finds closest downslope index to the given upslope index
+    '''
+    try:
+        relevant_downslopes = all_downslopes[all_downslopes>=upslope] 
+        closest_index = np.argmin(np.abs(relevant_downslopes-upslope))
+        closest_downslope = relevant_downslopes[closest_index]
+        return(closest_downslope)
+    except ValueError:
+        return(None)
+    
+    
+
 
 def get_start_stop(LED_signal, on_off):
     '''
@@ -99,12 +114,16 @@ def align_audio_to_video(LED_signal, fps, audiosync, fs):
     Returns : 
 
         audio_start : integer. Frame in the video at which the audio starts
-	audio_stop : integer. Frame in the video at which the audio stops
-	crosscor : np.array. cross correlation of the video LED on/off signal to the 
+
+        audio_stop : integer. Frame in the video at which the audio stops
+    
+    	crosscor : np.array. cross correlation of the video LED on/off signal to the 
 		   obtained on/off audio sync signal. 
+          
+        on_off : np.array. The reconstructed On/Off signal from the input sync
 
     Note: A Warning is thrown if there is no real peak found !! 	
-    
+
     '''
     on_off = get_on_off_peaks(audiosync, fs, fps)
     audio_start, audio_stop, crosscor = get_start_stop(LED_signal, on_off)
@@ -116,6 +135,6 @@ def align_audio_to_video(LED_signal, fps, audiosync, fs):
         warnings.warn('There may not be a strong peak !!')
     else:
         print('there might be a peak')
-    
-    return(audio_start, audio_stop, crosscor)  
+
+    return(audio_start, audio_stop, crosscor, on_off)  
 

@@ -64,7 +64,10 @@ def get_on_off_peaks(sync_signal, fs, video_fps):
         # get closest downslope in the available array:
         downslope = get_closest_downslope(upslope, negpeaks_vidfps)
         if downslope is not None:
-            on_off[upslope:downslope] = 1 
+            if downslope != upslope:
+                on_off[upslope:downslope] = 1 
+            else:
+                on_off[upslope:upslope+1] = 1 
     return(on_off)
 
 def get_closest_downslope(upslope, all_downslopes):

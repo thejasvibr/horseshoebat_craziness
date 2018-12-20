@@ -42,6 +42,7 @@ def generate_audio_snippet(snippet_type, **kwargs):
                 types of bat calls. 
     '''
     ferrum, eume, fm = snippet_type 
+    print(ferrum, eume, fm)
     fs = 250000
     if 'snippet_duration' in kwargs.keys():
         snippet_duration = kwargs['snippet_duration']
@@ -62,7 +63,7 @@ def generate_audio_snippet(snippet_type, **kwargs):
     snippet = np.zeros(int(fs*snippet_duration))
     
     for  amp_ratio, calltype in zip(amp_ratios, [ferrum_call, eume_call, fm_call]):
-        snippet += amp_ratio*ferrum_call
+        snippet += amp_ratio*calltype
     return(snippet)
     
 
@@ -167,27 +168,27 @@ def make_singleCFbat_sequence(cf_type, durn, fs):
                                    'rightangle',
                                    'onlyCF'],1)[0]
     
-    call_durationrange = np.arange(30,100) * 10**-3
+    call_durationrange = np.arange(10,100) * 10**-3
 
     duty_cycle = np.random.choice(xrange(50,80),1) * 10**-2
     
     baseline_calldurn = np.random.choice(call_durationrange,1)
 
-    approx_numcalls = np.ceil(duty_cycle*durn/baseline_calldurn)
+    approx_numcalls = int(np.ceil(duty_cycle*durn/baseline_calldurn))
     # set the call durations of each 
     call_durns = np.random.choice(np.arange(0,0.006,0.001),approx_numcalls) + baseline_calldurn
     # set the interpulse interval following each call
     sum_ipis = sum(call_durns) * ((1-duty_cycle)/duty_cycle)
     baseline_ipi = sum_ipis/approx_numcalls
     ipis = baseline_ipi + np.random.choice(np.arange(0,0.010,0.001),approx_numcalls)
-    long_snippet_durn = sum(ipis) + sum(call_durns)
 
     longCFcall_seq = create_CF_call_sequence(call_durns, ipis, CF_value,
                                          call_shape, 
-                                         long_snippet_durn, fs)
-    differnce = longCFcall_seq.size - int(durn*fs)
+                                         fs)
+
+    difference = longCFcall_seq.size - int(durn*fs)
     if difference > 0:
-        valid_startind = np.random.choice(xrange(0,differnce),1)
+        valid_startind = int(np.random.choice(xrange(0,difference),1))
         CFcall_seq = longCFcall_seq[valid_startind:valid_startind+int(durn*fs)]
     elif difference < 0:
         padding = np.zeros(difference)
@@ -197,39 +198,61 @@ def make_singleCFbat_sequence(cf_type, durn, fs):
 
     return(CFcall_seq)
 
-def create_CF_call_sequence(call_durns, ipis, CF_value, call_shape, durn, fs):
+def create_CF_call_sequence(call_durns, ipis, CF_value, call_shape, fs):
     '''
     '''
-    baseline_reclevel = np.random.choice(np.arange(10**-4,0.9, 10**-4),1)
+    baseline_reclevel = np.random.choice(np.arange(10**-3,0.9, 10**-4),1)
+    call_sequence = np.array([])
     
     for calldurn, ipi in zip(call_durns, ipis):
         seg_length = calldurn+ipi
         callipi_segment = np.zeros(int(seg_length*fs))
+        one_call = make_one_CFcall(calldurn, CF_value, fs, call_shape)       
+        one_call *= baseline_reclevel 
+        callipi_segment[-one_call.size:] = one_call
+        call_sequence = np.concatenate((call_sequence, callipi_segment))
 
-        if call_shape is 'staplepin':
-            staplepin_call = make_staplepin(calldurn, CF_value)
-            
-        pass
-        
-
-    
-    
-    
-    pass
+    return(call_sequence)
 
 
-def make_staplepin(call_durn, cf_freq):
+
+def make_one_CFcall(call_durn, cf_freq, fs, call_shape):
     '''
+    FM duration values based on : Jones & Rayner 1989, Foragin behaviour 
+    and echolocation of wild horseshoe bats ...., Behav Ecol Sociobiol
+    
+    TODO : make harmonics
     '''
-    pass
+    # choose an FM duration
+    FM_durnrange = np.arange(0.001, 0.005, 10**-4)
+    fm_durn = np.random.choice(FM_durnrange,1)
 
-def make_rightangle():
-    pass
+    # choose an Fm start/end frequency :
+    FM_bandwidth= xrange(5,15)
+    fm_bw = np.random.choice(FM_bandwidth, 1)
+    start_f = cf_freq - fm_bw
+    # 
+    
+    t = np.linspace(0, call_durn, int(call_durn*fs))
+    # define the transition points in the staplepin
+    freqs = np.tile(cf_freq, t.size)
+    numfm_samples = int(fs*fm_durn)
+    if call_shape is 'staplepin':       
+        freqs[:numfm_samples] = np.linspace(start_f,cf_freq,numfm_samples, endpoint=True)
+        freqs[-numfm_samples:] = np.linspace(cf_freq,start_f,numfm_samples, endpoint=True)
+        p = np.polyfit(t, freqs, 20)
+        
+    elif call_shape is 'rightangle':
+        freqs[-numfm_samples:] = np.linspace(cf_freq,start_f,numfm_samples, endpoint=True)
+        p = np.polyfit(t, freqs, 20)
+    else:
+        p = np.polyfit(t, freqs, 1)
+      
+    cfcall = signal.sweep_poly(t, p)
+    windowing = np.random.choice(['hann', 'nuttall', 'bartlett', 'boxcar'], 1)[0]
+    cfcall *= signal.get_window(windowing, cfcall.size)
+    return(cfcall)
 
-def make_onlyCF():
-    pass
-        
-        
             
         
         

@@ -42,7 +42,6 @@ def generate_audio_snippet(snippet_type, **kwargs):
                 types of bat calls. 
     '''
     ferrum, eume, fm = snippet_type 
-    print(ferrum, eume, fm)
     fs = 250000
     if 'snippet_duration' in kwargs.keys():
         snippet_duration = kwargs['snippet_duration']
@@ -64,6 +63,10 @@ def generate_audio_snippet(snippet_type, **kwargs):
     
     for  amp_ratio, calltype in zip(amp_ratios, [ferrum_call, eume_call, fm_call]):
         snippet += amp_ratio*calltype
+    
+    # add background noise between -80-100 dB rms
+    bkg_noise_dB = np.random.choice(np.arange(-80,-100,-1),1)
+    snippet += np.random.normal(0, 10**(bkg_noise_dB/20.0), snippet.size)
     return(snippet)
     
 
@@ -168,7 +171,7 @@ def make_singleCFbat_sequence(cf_type, durn, fs):
                                    'rightangle',
                                    'onlyCF'],1)[0]
     
-    call_durationrange = np.arange(10,100) * 10**-3
+    call_durationrange = np.arange(10,50) * 10**-3
 
     duty_cycle = np.random.choice(xrange(50,80),1) * 10**-2
     
@@ -218,9 +221,7 @@ def create_CF_call_sequence(call_durns, ipis, CF_value, call_shape, fs):
 
 def make_one_CFcall(call_durn, cf_freq, fs, call_shape):
     '''
-    FM duration values based on : Jones & Rayner 1989, Foragin behaviour 
-    and echolocation of wild horseshoe bats ...., Behav Ecol Sociobiol
-    
+      
     TODO : make harmonics
     '''
     # choose an FM duration
@@ -228,7 +229,7 @@ def make_one_CFcall(call_durn, cf_freq, fs, call_shape):
     fm_durn = np.random.choice(FM_durnrange,1)
 
     # choose an Fm start/end frequency :
-    FM_bandwidth= xrange(5,15)
+    FM_bandwidth= xrange(10,25)
     fm_bw = np.random.choice(FM_bandwidth, 1)
     start_f = cf_freq - fm_bw
     # 
@@ -254,6 +255,13 @@ def make_one_CFcall(call_durn, cf_freq, fs, call_shape):
     return(cfcall)
 
             
-        
+if __name__ == '__main__':
+    sn = generate_audio_snippet('101')
+    
+    plt.figure()
+    plt.subplot(211)
+    plt.specgram(sn, Fs=250000, NFFT=256, noverlap=100)
+    plt.subplot(212)
+    plt.plot(sn)
         
    

@@ -169,7 +169,7 @@ def make_singleCFbat_sequence(cf_type, durn, fs):
     CF_value = np.random.choice(CF_range)
     call_shape = np.random.choice(['staplepin',
                                    'rightangle',
-                                   'onlyCF'],1)[0]
+                                   'onlyCF'],1, p=[0.6,0.2,0.2])[0]
     
     call_durationrange = np.arange(10,50) * 10**-3
 
@@ -225,12 +225,12 @@ def make_one_CFcall(call_durn, cf_freq, fs, call_shape):
     TODO : make harmonics
     '''
     # choose an FM duration
-    FM_durnrange = np.arange(0.001, 0.005, 10**-4)
+    FM_durnrange = np.arange(0.001, 0.0031, 10**-4)
     fm_durn = np.random.choice(FM_durnrange,1)
 
     # choose an Fm start/end frequency :
     FM_bandwidth= xrange(10,25)
-    fm_bw = np.random.choice(FM_bandwidth, 1)
+    fm_bw = np.random.choice(FM_bandwidth, 1)*10.0**3
     start_f = cf_freq - fm_bw
     # 
     
@@ -238,26 +238,38 @@ def make_one_CFcall(call_durn, cf_freq, fs, call_shape):
     # define the transition points in the staplepin
     freqs = np.tile(cf_freq, t.size)
     numfm_samples = int(fs*fm_durn)
-    if call_shape is 'staplepin':       
+    if call_shape == 'staplepin':       
         freqs[:numfm_samples] = np.linspace(start_f,cf_freq,numfm_samples, endpoint=True)
         freqs[-numfm_samples:] = np.linspace(cf_freq,start_f,numfm_samples, endpoint=True)
         p = np.polyfit(t, freqs, 20)
-        
-    elif call_shape is 'rightangle':
+
+    elif call_shape == 'rightangle':
         freqs[-numfm_samples:] = np.linspace(cf_freq,start_f,numfm_samples, endpoint=True)
         p = np.polyfit(t, freqs, 20)
-    else:
+    elif call_shape == 'onlyCF':
         p = np.polyfit(t, freqs, 1)
+    else: 
+        raise ValueError('Wrong input given')
       
     cfcall = signal.sweep_poly(t, p)
-    windowing = np.random.choice(['hann', 'nuttall', 'bartlett', 'boxcar'], 1)[0]
+    windowing = np.random.choice(['hann', 'nuttall', 'bartlett'], 1)[0]
     cfcall *= signal.get_window(windowing, cfcall.size)
     return(cfcall)
+    
+def calculate_snippet_features(snippet, chunksize, **kwargs):
+    '''
+    '''
+    pass
+    
 
             
 if __name__ == '__main__':
-    sn = generate_audio_snippet('101')
     
+    situation = np.random.choice(['0','1','m'],1).tolist() + np.random.choice(['0','1','m'],1).tolist()+     np.random.choice(['0','1'],1).tolist()
+    situation_name =''.join(situation)
+    
+    sn = generate_audio_snippet(situation_name)
+    print(situation_name, 'situation name')
     plt.figure()
     plt.subplot(211)
     plt.specgram(sn, Fs=250000, NFFT=256, noverlap=100)

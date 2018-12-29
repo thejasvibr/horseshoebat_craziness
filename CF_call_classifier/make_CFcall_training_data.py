@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 plt.rcParams['agg.path.chunksize'] = 10000
 import numpy as np 
 import scipy.signal as signal 
+import warnings
 
 def generate_audio_snippet(snippet_type, **kwargs):
     '''Generates a snippet of given duration with the snippter type. 
@@ -169,7 +170,7 @@ def make_singleCFbat_sequence(cf_type, durn, fs):
     CF_value = np.random.choice(CF_range)
     call_shape = np.random.choice(['staplepin',
                                    'rightangle',
-                                   'onlyCF'],1, p=[0.6,0.2,0.2])[0]
+                                   ],1, p=[0.6,0.4])[0]
     
     call_durationrange = np.arange(10,50) * 10**-3
 
@@ -228,12 +229,12 @@ def make_one_CFcall(call_durn, cf_freq, fs, call_shape):
     FM_durnrange = np.arange(0.001, 0.0031, 10**-4)
     fm_durn = np.random.choice(FM_durnrange,1)
 
-    # choose an Fm start/end frequency :
-    FM_bandwidth= xrange(10,25)
+    # choose an Fm start/end fr equency :
+    FM_bandwidth= xrange(5,25)
     fm_bw = np.random.choice(FM_bandwidth, 1)*10.0**3
     start_f = cf_freq - fm_bw
     # 
-    
+    polynomial_num = 25
     t = np.linspace(0, call_durn, int(call_durn*fs))
     # define the transition points in the staplepin
     freqs = np.tile(cf_freq, t.size)
@@ -241,13 +242,17 @@ def make_one_CFcall(call_durn, cf_freq, fs, call_shape):
     if call_shape == 'staplepin':       
         freqs[:numfm_samples] = np.linspace(start_f,cf_freq,numfm_samples, endpoint=True)
         freqs[-numfm_samples:] = np.linspace(cf_freq,start_f,numfm_samples, endpoint=True)
-        p = np.polyfit(t, freqs, 20)
+        p = np.polyfit(t, freqs, polynomial_num)
 
     elif call_shape == 'rightangle':
-        freqs[-numfm_samples:] = np.linspace(cf_freq,start_f,numfm_samples, endpoint=True)
-        p = np.polyfit(t, freqs, 20)
-    elif call_shape == 'onlyCF':
-        p = np.polyfit(t, freqs, 1)
+        # alternate between rising and falling right angle shapes
+        rightangle_type = np.random.choice(['rising','falling'],1)
+        if rightangle_type == 'rising':
+            freqs[:numfm_samples] = np.linspace(cf_freq,start_f,numfm_samples, endpoint=True)
+        elif rightangle_type == 'falling':
+            freqs[-numfm_samples:] = np.linspace(cf_freq,start_f,numfm_samples, endpoint=True)
+        p = np.polyfit(t, freqs, polynomial_num)
+
     else: 
         raise ValueError('Wrong input given')
       
@@ -257,23 +262,130 @@ def make_one_CFcall(call_durn, cf_freq, fs, call_shape):
     return(cfcall)
     
 def calculate_snippet_features(snippet, chunksize, **kwargs):
-    '''
-    '''
-    pass
+    ''' bandpasses a snippet audio and calculates the rms fo the signal 
+    for the five pred-determined frequency bands. 
     
+    Parameters:
+
+        snippet : Nsamples np.array. audio snippet
+        chunksize : int. number of samples in each 'chunk' for which rms is calculated
+
+    Returns:
+
+        rms_bands : 5 x Nchunks np.array. The rms of all chunks across the differen
+                    t frequency bands. 
+    '''
+    eume_cf = np.array([100000.00,110000])
+    eume_fm = np.array([90000.00,99000])
+    ferrum_cf = np.array([77000.00,83000])
+    ferrum_fm =  np.array([60000.00,76000])
+    myotis_fm = np.array([20000.0,50000.0])
+    
+    all_bands = [eume_cf, eume_fm, ferrum_cf, ferrum_fm, myotis_fm]
+
+    # calculate rms in each of the bands:
+    if 'fs' not in kwargs.keys():
+        fs = 250000
+    else: 
+        fs = kwargs['fs']
+
+    rms_bands = []
+    for each_band in all_bands:
+        # bandpass 
+        b,a = signal.butter(8, 2*each_band/fs, 'bandpass')
+        bp_snippet = signal.filtfilt(b,a, snippet)
+        # calculate rms for all chunks
+        band_chunkrms = calc_rms_of_chunks(bp_snippet, chunksize)
+        rms_bands.append(band_chunkrms)
+    
+    all_rms_bands = np.array(rms_bands).reshape(5,-1)
+    # transpose to make it a channels last format for keras 
+    all_rms_bands = all_rms_bands.T
+    return(all_rms_bands)
+
+def calc_features_pll(audio_snippets):
+    '''
+    Parameters:
+        audio_snippets : Nexamples x Nsamples np.array. 
+    
+    Returns: 
+        features : Nexamples x Nchunks x 5 np.array
+    '''
+    features = np.apply_along_axis(calculate_snippet_features,1,audio_snippets,
+                                   chunksize=250)
+    return(features)
+
+def calc_rms_of_chunks(snippet, chunksize):
+    '''
+    '''
+    all_rms = []
+    
+    for start_ind in range(0, snippet.size, chunksize):
+        chunk = snippet[start_ind:start_ind +chunksize-1]
+        all_rms.append(rms(chunk))
+    
+    rms_values = np.array(all_rms)
+    return(rms_values)
+    
+
+def rms(chunk):
+    '''
+    '''
+    sq = np.square(chunk)
+    mean_Sq = np.mean(sq)
+    root_mean_sq = np.sqrt(mean_Sq)
+    return(root_mean_sq)
+    
+
+def generate_audio_and_calc_features():
+    ferrum =  np.random.choice(['0','1','m'],1).tolist() 
+    eume   =  np.random.choice(['0','1','m'],1).tolist()
+    myotis =  np.random.choice(['0','1'],1).tolist()
+    situation = ferrum + eume + myotis
+    situation_name =''.join(situation)
+    
+    audio = generate_audio_snippet(situation_name)
+    chunk_size=250
+    features = calculate_snippet_features(audio,chunk_size)
+    return(situation_name, features)
+    
+
+def multiple_features(X):
+    '''calculates 100 examples with different scenarios and features from
+    scenarios
+    '''
+    all_situations = []
+    all_features = []
+    for i in xrange(100):
+        situation, feature = generate_audio_and_calc_features()
+        all_situations.append(situation)
+        all_features.append(feature)
+    all_features = np.array(all_features)
+    return(all_situations, all_features)
 
             
 if __name__ == '__main__':
     
     situation = np.random.choice(['0','1','m'],1).tolist() + np.random.choice(['0','1','m'],1).tolist()+     np.random.choice(['0','1'],1).tolist()
     situation_name =''.join(situation)
-    
+
     sn = generate_audio_snippet(situation_name)
+    snip_features = calculate_snippet_features(sn, 250)
+
     print(situation_name, 'situation name')
     plt.figure()
-    plt.subplot(211)
+    plt.subplot(311)
     plt.specgram(sn, Fs=250000, NFFT=256, noverlap=100)
-    plt.subplot(212)
+    plt.subplot(312)
     plt.plot(sn)
-        
+    plt.subplot(313)
+    for i in range(5):
+        plt.plot(snip_features[:,i])
+
+    situation, features = generate_audio_and_calc_features()      
+    plt.figure()
+    plt.plot
+    for i in range(5):
+        plt.plot(features[:,i])
+   
    

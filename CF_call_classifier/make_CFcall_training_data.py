@@ -350,7 +350,7 @@ def generate_audio_and_calc_features():
     return(situation_name, features)
     
 
-def multiple_features(X):
+def make_100_examples(X):
     '''calculates 100 examples with different scenarios and features from
     scenarios
     '''

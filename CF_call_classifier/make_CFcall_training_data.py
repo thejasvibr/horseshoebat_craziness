@@ -57,7 +57,7 @@ def generate_audio_snippet(snippet_type, **kwargs):
     fm_call = make_FM_call(fm, snippet_duration, fs)
 
     # randomly choose a ratio to amplify/attenuate the three types of calls:
-    rand_nums = np.random.choice(range(1,11),3)
+    rand_nums = np.random.choice(range(1,21),3)
     amp_ratios = rand_nums/np.sum(rand_nums)
 
     snippet = np.zeros(int(fs*snippet_duration))
@@ -65,9 +65,10 @@ def generate_audio_snippet(snippet_type, **kwargs):
     for  amp_ratio, calltype in zip(amp_ratios, [ferrum_call, eume_call, fm_call]):
         snippet += amp_ratio*calltype
     
-    # add background noise between -80-100 dB rms
-    bkg_noise_dB = np.random.choice(np.arange(-80,-100,-1),1)
+    # add background noise or
+    bkg_noise_dB = np.random.choice(np.arange(-60,-40),1)
     snippet += np.random.normal(0, 10**(bkg_noise_dB/20.0), snippet.size)
+    correct_clipping(snippet)
     return(snippet)
     
 
@@ -78,9 +79,7 @@ def make_FM_call(fm_in, durn, fs):
         fm_in : string that is either '0' or '1'
         
     Returns:
-        
-    TODO:
-        *1 Implement FM call generation with second harmonic in place ! 
+
     '''
     
     num_calls = np.random.choice(xrange(1,6),1)
@@ -89,7 +88,7 @@ def make_FM_call(fm_in, durn, fs):
     
     if fm_in is '0':
         # return zeros array:
-        no_fm = make_zeros_array(durn,fs)
+        no_fm = make_nobat_snippet(durn,fs)
         return(no_fm)
     else:
         all_calls = []
@@ -107,7 +106,13 @@ def make_FM_call(fm_in, durn, fs):
             
             t = np.linspace(0, call_duration, int(fs*call_duration))
             chirp = signal.chirp(t, start_f, t[-1], end_f, method=fm_shape)
-           
+            # implement 2nd harmonic in FM chirp
+            if np.random.random()<=0.3:
+                chirp_hm2 = signal.chirp(t, start_f*2, t[-1], end_f*2, method=fm_shape)
+                if start_f*2 >= fs/2.0:
+                    chirp_hm2 = anti_aliasing_filter(chirp_hm2)
+                chirp += chirp_hm2
+                chirp *= 1/np.max(chirp)
             chirp *= signal.get_window(window_type, chirp.size)
             chirp *= np.random.choice(np.linspace(0.2,0.9,100),1)
             
@@ -129,19 +134,49 @@ def make_FM_call(fm_in, durn, fs):
         fm_snippet *= 1/np.max(fm_snippet)
         return(fm_snippet)
 
+def anti_aliasing_filter(X, level=0.95):
+    b,a = signal.butter(8, level, 'lowpass')
+    lp_X = signal.lfilter(b,a,X)
+    return(lp_X)
 
-def make_zeros_array(duration,fs):
+def make_nobat_snippet(duration,fs):
     '''
     '''
-    zeros_array = np.zeros(int(duration*fs))
-    return(zeros_array)
+    nobat_snippet = np.zeros(int(duration*fs))
+    
+    # ad backgroun noise in dB ;
+    bkg_noise = np.random.choice(np.arange(-80, -40),1)
+    nobat_snippet += np.random.normal(0, 10**(bkg_noise/20.0), nobat_snippet.size)
+   
+    correct_clipping(nobat_snippet);
+    # mimic insect noises by bandpassing between 0-40 kHz:
+    if np.random.random() <= 0.3:
+        nobat_snippet = add_insect_noise(nobat_snippet/np.max(nobat_snippet), fs)
+    return(nobat_snippet)
+
+def add_insect_noise(snippet, fs):
+    insect_range = np.arange(0.1,40,10)*10**3
+    lower, higher = np.sort(np.random.choice(insect_range, 2))
+    b,a = signal.butter(4, [(2*lower)/fs,(2*higher)/fs], 'bandpass')
+    insect_snippet = signal.lfilter(b,a,snippet)
+    return(insect_snippet)
+    
+
+def correct_clipping(X):
+    '''
+    '''
+    if sum(abs(X)>1) > 0 :
+        X[X>1.0] = 1.0
+        X[X<-1.0] = -1.0
+       
+    return(X)
 
 def make_CF_call(numbats, cf_type, snippet_duration, fs):
     '''
     '''
     if numbats is '0':
         # return zeros array:
-        noCF = make_zeros_array(snippet_duration,fs)
+        noCF = make_nobat_snippet(snippet_duration,fs)
         return(noCF)
 
     elif numbats is '1':
@@ -152,35 +187,41 @@ def make_CF_call(numbats, cf_type, snippet_duration, fs):
         multiCFbat = np.zeros(int(snippet_duration*fs))
         num_cfbats = np.random.choice(xrange(1,4),1)
         for each_callingbat in xrange(num_cfbats):
-            multiCFbat += make_singleCFbat_sequence(cf_type, snippet_duration, fs)
+            multiCFbat += make_singleCFbat_sequence(cf_type, snippet_duration,
+                                                    fs,multibat=True)
         
         multiCFbat *= 1/np.max(multiCFbat)
         return(multiCFbat)
             
-def make_singleCFbat_sequence(cf_type, durn, fs):
+def make_singleCFbat_sequence(cf_type, durn, fs, multibat=False):
     ''' Makes a Cf bat call sequence by randomly choosing a 
     call duration, call shape and other parameters. 
     
     '''
     if cf_type is 'ferrum':
-        CF_range = np.arange(79000,82500,500)
+        CF_range = np.arange(79000,82500,1000)
     elif cf_type is 'eume':
-        CF_range = np.arange(99500,106500,500)
+        CF_range = np.arange(99500,106500,1000)
 
     CF_value = np.random.choice(CF_range)
     call_shape = np.random.choice(['staplepin',
                                    'rightangle',
                                    ],1, p=[0.6,0.4])[0]
     
-    call_durationrange = np.arange(10,50) * 10**-3
+    
 
-    duty_cycle = np.random.choice(xrange(50,80),1) * 10**-2
+    if multibat:
+        duty_cycle = np.random.choice(xrange(75,95),1) * 10**-2
+        call_durationrange = np.arange(5,20) * 10**-3
+    else:
+        duty_cycle = np.random.choice(xrange(50,95),1) * 10**-2
+        call_durationrange = np.arange(10,50) * 10**-3
     
     baseline_calldurn = np.random.choice(call_durationrange,1)
 
     approx_numcalls = int(np.ceil(duty_cycle*durn/baseline_calldurn))
     # set the call durations of each 
-    call_durns = np.random.choice(np.arange(0,0.006,0.001),approx_numcalls) + baseline_calldurn
+    call_durns = np.random.choice(np.arange(0,0.003,0.001),approx_numcalls) + baseline_calldurn
     # set the interpulse interval following each call
     sum_ipis = sum(call_durns) * ((1-duty_cycle)/duty_cycle)
     baseline_ipi = sum_ipis/approx_numcalls
@@ -205,7 +246,7 @@ def make_singleCFbat_sequence(cf_type, durn, fs):
 def create_CF_call_sequence(call_durns, ipis, CF_value, call_shape, fs):
     '''
     '''
-    baseline_reclevel = np.random.choice(np.arange(10**-3,0.9, 10**-4),1)
+    baseline_reclevel = np.random.choice(np.linspace(10**-5,0.9, 100),1)
     call_sequence = np.array([])
     
     for calldurn, ipi in zip(call_durns, ipis):
@@ -257,10 +298,45 @@ def make_one_CFcall(call_durn, cf_freq, fs, call_shape):
         raise ValueError('Wrong input given')
       
     cfcall = signal.sweep_poly(t, p)
+    # randomly decide if the call will have harmonics or not
+    cfcall = generate_cf_harmonics(cfcall, t, p)
+
     windowing = np.random.choice(['hann', 'nuttall', 'bartlett'], 1)[0]
     cfcall *= signal.get_window(windowing, cfcall.size)
     return(cfcall)
+
+def generate_cf_harmonics(main_call, t, p):
+    '''
+    ''' 
+    main_hmonic_freq = np.polyval(p,t)
+    if np.random.random()<0.4:
+        lower_hmonic = main_hmonic_freq/2.0
+        p_lower = np.polyfit(t, lower_hmonic, 15)
+        lower_chirp = signal.sweep_poly(t, p_lower)
+        lower_hmonic_attenuation = np.random.choice(np.arange(-40,-10),1)
+        lower_chirp *= 10**(lower_hmonic_attenuation/20.0)
+        main_call += lower_chirp
+        
+    if np.random.random()<0.1:
+        # upsample to 3*fs
+        t_upsample = np.linspace(np.min(t), np.max(t), t.size*3)
+        harmonic_range = np.random.choice(np.arange(1.2,1.8,0.1),1)
+        upper_hmonics = np.polyval(p, t_upsample)*harmonic_range
+        p_upper = np.polyfit(t_upsample, upper_hmonics, 15)
+        upper_chirp = signal.sweep_poly(t_upsample, p_upper)
+        # lowpass filter below 125 kHz
+        lp_upper_chirp = anti_aliasing_filter(upper_chirp, 0.32)
+        # downsample back to previous rate 
+        downsamples = main_call.size
+        upper_chirp_downsample = signal.resample(lp_upper_chirp, downsamples)
+        upper_hmonic_atten = np.random.choice(np.arange(-40,-10),1)
+        upper_chirp_downsample *= 10**(upper_hmonic_atten/20.0)
+        main_call += upper_chirp_downsample
     
+    main_call *= 1/np.max(main_call)
+    return(main_call)
+    
+
 def calculate_snippet_features(snippet, chunksize=250, **kwargs):
     ''' bandpasses a snippet audio and calculates the rms fo the signal 
     for the five pred-determined frequency bands. 
@@ -269,7 +345,11 @@ def calculate_snippet_features(snippet, chunksize=250, **kwargs):
 
         snippet : Nsamples np.array. audio snippet
         chunksize : int. number of samples in each 'chunk' for which rms is calculated
-
+    
+    Keyword arguments:
+        fs : int. sampling rate in Hz. Defaults to 250000. 
+        channel_norm :  Boolean. Defaults to False. If True then the rms within each channel
+                      is divided by the maximum value. 
     Returns:
 
         rms_bands : 5 x Nchunks np.array. The rms of all chunks across the differen
@@ -383,17 +463,11 @@ if __name__ == '__main__':
     print(situation_name, 'situation name')
     plt.figure()
     plt.subplot(311)
+    plt.title(situation_name)
     plt.specgram(sn, Fs=250000, NFFT=256, noverlap=100)
     plt.subplot(312)
     plt.plot(sn)
     plt.subplot(313)
     for i in range(5):
         plt.plot(snip_features[:,i])
-
-    situation, features = generate_audio_and_calc_features()      
-    plt.figure()
-    plt.plot
-    for i in range(5):
-        plt.plot(features[:,i])
-   
    

@@ -261,7 +261,7 @@ def make_one_CFcall(call_durn, cf_freq, fs, call_shape):
     cfcall *= signal.get_window(windowing, cfcall.size)
     return(cfcall)
     
-def calculate_snippet_features(snippet, chunksize, **kwargs):
+def calculate_snippet_features(snippet, chunksize=250, **kwargs):
     ''' bandpasses a snippet audio and calculates the rms fo the signal 
     for the five pred-determined frequency bands. 
     
@@ -289,6 +289,12 @@ def calculate_snippet_features(snippet, chunksize, **kwargs):
     else: 
         fs = kwargs['fs']
 
+    # normalise the rms values of each channel if required:
+    if 'channel_norm' in kwargs.keys():
+        channel_norm = kwargs['channel_norm']
+    else:
+        channel_norm = False
+
     rms_bands = []
     for each_band in all_bands:
         # bandpass 
@@ -296,6 +302,8 @@ def calculate_snippet_features(snippet, chunksize, **kwargs):
         bp_snippet = signal.filtfilt(b,a, snippet)
         # calculate rms for all chunks
         band_chunkrms = calc_rms_of_chunks(bp_snippet, chunksize)
+        if channel_norm:
+            band_chunkrms *= 1.0/np.max(band_chunkrms)
         rms_bands.append(band_chunkrms)
     
     all_rms_bands = np.array(rms_bands).reshape(5,-1)

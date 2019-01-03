@@ -246,7 +246,7 @@ def make_singleCFbat_sequence(cf_type, durn, fs, multibat=False):
 def create_CF_call_sequence(call_durns, ipis, CF_value, call_shape, fs):
     '''
     '''
-    baseline_reclevel = np.random.choice(np.linspace(10**-5,0.9, 100),1)
+    baseline_reclevel = np.random.choice(np.linspace(0.01,0.9, 100),1)
     call_sequence = np.array([])
     
     for calldurn, ipi in zip(call_durns, ipis):

@@ -332,7 +332,7 @@ def generate_cf_harmonics(main_call, t, p):
         upper_hmonic_atten = np.random.choice(np.arange(-40,-10),1)
         upper_chirp_downsample *= 10**(upper_hmonic_atten/20.0)
         main_call += upper_chirp_downsample
-    
+
     main_call *= 1/np.max(main_call)
     return(main_call)
     
@@ -403,6 +403,56 @@ def calc_features_pll(audio_snippets):
                                    chunksize=250)
     return(features)
 
+def calc_features_fft_pll(audio_snippets):
+    '''
+    Parameters:
+        audio_snippets : Nexamples x Nsamples np.array. 
+    
+    Returns: 
+        features : Nexamples x Nchunks x 5 np.array
+    '''
+    features = np.apply_along_axis(calculate_features_fft_style,1,
+                                   audio_snippets)
+    return(features)
+
+
+def calculate_features_fft_style(snippet, chunksize=250, **kwargs):
+    '''calculate bandwise features of a snippet along each of the chunks
+    In case the snippet size and chunksize do not result in an integer number
+    of chunks, then the floor of the division is the result. 
+
+    Parameters:
+        snippet: Nsamples np.array of audio recordings
+
+        chunksize: int. number of samples in a single chunk for which
+                    the fft is done. Defaults to 250 samples.
+
+    Returns:
+        band_features : Nbands x Nchunks np.array. Nbands is given 
+                        by the resulting number of bands 
+                        based on the fft of the chunksize. 
+                        Nchunks is Nsamples/chunksize. 
+
+    '''
+    
+    num_chunks = int(np.floor(snippet.size/chunksize))
+    if np.remainder(snippet.size, chunksize) >0:
+        raise ValueError('Non integer number of chunks! ')
+    
+    starts = np.arange(0, snippet.size, chunksize)
+    stops =  starts+chunksize
+    
+    num_bands = sum(np.fft.fftfreq(chunksize)>=0)
+    all_ffts = np.zeros((num_chunks, num_bands))
+    i = 0
+    for start, stop in zip(starts, stops):
+        audio_chunk = snippet[start:stop]
+        all_ffts[i,:] = np.abs(np.fft.fft(audio_chunk))[:num_bands]
+        i += 1 
+
+    return(all_ffts)        
+
+
 def calc_rms_of_chunks(snippet, chunksize):
     '''
     '''
@@ -436,6 +486,34 @@ def generate_audio_and_calc_features():
     chunk_size=250
     features = calculate_snippet_features(audio,chunk_size)
     return(situation_name, features)
+
+def generate_audio_and_calc_fft_features():
+    '''
+    '''
+    ferrum =  np.random.choice(['0','1','m'],1).tolist() 
+    eume   =  np.random.choice(['0','1','m'],1).tolist()
+    myotis =  np.random.choice(['0','1'],1).tolist()
+    situation = ferrum + eume + myotis
+    situation_name =''.join(situation)
+
+    audio = generate_audio_snippet(situation_name)
+    features = calculate_features_fft_style(audio)
+    return(situation_name, features)
+
+def make_100_examples_fftfeatures(X):
+    '''
+    '''
+    all_situations = []
+    all_features = []
+    for i in xrange(100):
+        situation, feature = generate_audio_and_calc_fft_features()
+        all_situations.append(situation)
+        all_features.append(feature)
+    all_features = np.array(all_features)
+    print('Done with 1 x100 examples')
+    return(all_situations, all_features)
+    
+    
     
 
 def make_100_examples(X):
@@ -449,9 +527,84 @@ def make_100_examples(X):
         all_situations.append(situation)
         all_features.append(feature)
     all_features = np.array(all_features)
+    print('Done with 1 x100 examples')
     return(all_situations, all_features)
 
+def make_18number_to_9number_converter():
+    '''dictionary that converts the 18 numeric classes
+    to a 9 numeric classes. this system ignores the presence of 
+    absence of myotis FM calls
+    '''
+    eighteen_classes_dict = make_snippettype_to_18number_converter()
+    nine_classes_dict = make_snippettype_to_9number_converter()
+    
+    eighteen_to_9classes = {}
+    for key, numeric_18classes in eighteen_classes_dict.iteritems():
+        eighteen_to_9classes[numeric_18classes] = nine_classes_dict[key]
+    return(eighteen_to_9classes)
+
+def make_snippettype_to_18number_converter():
+    '''Converts a string with Ferrum,Eume,Myotis 
+    to one of the 18 numbers. 
+    '''
+    # make the reverse translation dictionary 
+    cf_bat_states = ['0','1','m']
+
+    convert_snippet_type_to_categorical = {}
+
+    i = 0 
+    for ferrum in cf_bat_states:
+        for eume in cf_bat_states:
+            for fm in ['0','1']:
+                convert_snippet_type_to_categorical[ferrum+eume+fm] = i
+                i+=1
+    return(convert_snippet_type_to_categorical)
+
+
+    
+def make_snippettype_to_9number_converter():
+    # make the reverse translation dictionary 
+    cf_bat_states = ['0','1','m']
+
+    convert_snippet_type_to_9categorical = {}
+
+    i = 0 
+    for ferrum in cf_bat_states:
+        for eume in cf_bat_states:
             
+            for fm in ['0','1']:
+                convert_snippet_type_to_9categorical[ferrum+eume+fm] = i
+            i+=1   
+    return(convert_snippet_type_to_9categorical)
+
+def make_9number_to_class_converter():
+    '''convert 9 numbers to 2 place snippet type
+    '''
+    class_to_9number = make_snippettype_to_9number_converter()
+    nine_number_to_class = {}
+    for key, entry in class_to_9number.iteritems():
+        nine_number_to_class[entry] = key[:2]
+    return(nine_number_to_class)
+
+
+# calculate category wise accuracy:
+def get_categorywise_accuracy(conf_matrix):
+    '''Takes in a confusion matrix and calculates the per 
+    category accuracy 
+    '''
+    diags = np.diag(conf_matrix)
+    num_per_cat = np.sum(conf_matrix,1)
+    accuracy = diags/num_per_cat
+    return(accuracy)
+
+def max_normalise_each_channel(all_features):
+    '''takes in a Nsamples x Nchannels array
+    and divides each channel by the max value
+    '''
+    numsamples, numchannels = all_features.shape
+    for i in xrange(numchannels):
+        all_features[:,i] /= np.max(all_features[:,i])
+    return(all_features)
 if __name__ == '__main__':
     
     situation = np.random.choice(['0','1','m'],1).tolist() + np.random.choice(['0','1','m'],1).tolist()+     np.random.choice(['0','1'],1).tolist()

@@ -185,7 +185,7 @@ def make_CF_call(numbats, cf_type, snippet_duration, fs):
 
     elif numbats is 'm' : 
         multiCFbat = np.zeros(int(snippet_duration*fs))
-        num_cfbats = np.random.choice(xrange(1,4),1)
+        num_cfbats = np.random.choice(xrange(2,5),1)
         for each_callingbat in xrange(num_cfbats):
             multiCFbat += make_singleCFbat_sequence(cf_type, snippet_duration,
                                                     fs,multibat=True)
@@ -225,7 +225,8 @@ def make_singleCFbat_sequence(cf_type, durn, fs, multibat=False):
     # set the interpulse interval following each call
     sum_ipis = sum(call_durns) * ((1-duty_cycle)/duty_cycle)
     baseline_ipi = sum_ipis/approx_numcalls
-    ipis = baseline_ipi + np.random.choice(np.arange(0,0.010,0.001),approx_numcalls)
+    ipi_variation = np.random.choice(np.arange(0,0.003,0.001),approx_numcalls)
+    ipis = baseline_ipi + ipi_variation
 
     longCFcall_seq = create_CF_call_sequence(call_durns, ipis, CF_value,
                                          call_shape, 

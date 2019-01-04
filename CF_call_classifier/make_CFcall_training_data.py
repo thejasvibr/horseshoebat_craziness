@@ -57,7 +57,7 @@ def generate_audio_snippet(snippet_type, **kwargs):
     fm_call = make_FM_call(fm, snippet_duration, fs)
 
     # randomly choose a ratio to amplify/attenuate the three types of calls:
-    rand_nums = np.random.choice(range(1,21),3)
+    rand_nums = np.random.choice(range(1,25),3)
     amp_ratios = rand_nums/np.sum(rand_nums)
 
     snippet = np.zeros(int(fs*snippet_duration))
@@ -68,6 +68,9 @@ def generate_audio_snippet(snippet_type, **kwargs):
     # add background noise or
     bkg_noise_dB = np.random.choice(np.arange(-60,-40),1)
     snippet += np.random.normal(0, 10**(bkg_noise_dB/20.0), snippet.size)
+    # norm to max and amplify the recording to be between -40 to -0.9 dB max level
+    random_amp = np.random.choice(np.arange(0,20),1)
+    snippet *= 10**(random_amp/20.0)
     correct_clipping(snippet)
     return(snippet)
     
@@ -211,8 +214,9 @@ def make_singleCFbat_sequence(cf_type, durn, fs, multibat=False):
     
 
     if multibat:
-        duty_cycle = np.random.choice(xrange(75,95),1) * 10**-2
-        call_durationrange = np.arange(5,20) * 10**-3
+        # mimic slightly higher duty cycle and also 
+        duty_cycle = np.random.choice(xrange(60,95),1) * 10**-2
+        call_durationrange = np.arange(10,50) * 10**-3
     else:
         duty_cycle = np.random.choice(xrange(50,95),1) * 10**-2
         call_durationrange = np.arange(10,50) * 10**-3
@@ -612,16 +616,24 @@ if __name__ == '__main__':
     situation_name =''.join(situation)
 
     sn = generate_audio_snippet(situation_name)
-    snip_features = calculate_snippet_features(sn, 250)
-
-    print(situation_name, 'situation name')
-    plt.figure()
-    plt.subplot(311)
-    plt.title(situation_name)
-    plt.specgram(sn, Fs=250000, NFFT=256, noverlap=100)
-    plt.subplot(312)
-    plt.plot(sn)
-    plt.subplot(313)
-    for i in range(5):
-        plt.plot(snip_features[:,i])
-   
+    
+#    snip_features = calculate_snippet_features(sn, 250)
+#
+#    print(situation_name, 'situation name')
+#    plt.figure()
+#    plt.subplot(311)
+#    plt.title(situation_name)
+#    plt.specgram(sn, Fs=250000, NFFT=256, noverlap=100)
+#    plt.subplot(312)
+#    plt.plot(sn)
+#    plt.subplot(313)
+#    for i in range(5):
+#        plt.plot(snip_features[:,i])
+    np.warnings.filterwarnings('ignore')
+    all_std = []
+    for k in range(50):
+        print(k)
+        situation = np.random.choice(['0','1','m'],1).tolist() + np.random.choice(['0','1','m'],1).tolist()+     np.random.choice(['0','1'],1).tolist()
+        situation_name =''.join(situation)
+        all_std.append(rms(generate_audio_snippet(situation_name)))
+    plt.hist(all_std)

@@ -5,8 +5,9 @@ Created on Mon Apr 29 18:00:36 2019
 
 @author: tbeleyur
 """
-import glob
 import os
+import cv2
+import glob
 import time
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,16 +21,57 @@ start = time.time()
 #folder_path2 = os.path.join('//media//','tbeleyur//','THEJASVI_DATA_BACKUP_3//',
 #                            'horseshoebat_analysis//','videoanalysis//','Clipped videos_to be shared with Vivek//',
 #                            '14//')
-folder_path2 = 'video_frames//'
-images = sorted(glob.glob(folder_path2+'OrlovaChuka*.jpg'))
 
 
-def read_text_from_images(each_img):
+
+def get_data_from_video(video_path, **kwargs):
+    '''
+    
+    Keyword Argument
+    
+    border = (550, 50, 70, 990) # left, up, right, bottom
+    led_border = (867,1020,40,30)
+    max_numframes
+    '''
+    video = cv2.VideoCapture(video_path)
+    numframes = get_numframes_to_iterate(video, **kwargs)
+        
+        
+    print('starting frame reading')
+    timestamps = []
+    led_intensities = []
+    numframes = get_numframes_to_iterate(video, **kwargs)
+    for i in  range(1, numframes+1):
+        successful, frame = video.read()
+        if np.remainder(i,10)==0:
+            print('reading '+str(i)+'th frame')
+        if not successful:
+            frame = np.zeros((1080,944,3))
+            print('Couldnt read frame number' + str(i))
+        timestamp, intensity = get_lamp_and_timestamp(frame ,**kwargs)
+        timestamps.append(timestamp)
+        led_intensities.append(intensity)
+
+    print('Done with frame conversion')
+    return(timestamps, led_intensities)
+
+def get_numframes_to_iterate(videocap, **kwargs):
+    if 'max_numframes' in kwargs.keys():
+        return(kwargs['max_numframes'])
+    else:
+        return(int(videocap.get(cv2.CAP_PROP_FRAME_COUNT)))
+        
+    
+
+
+
+def get_lamp_and_timestamp(each_img, **kwargs):
+    '''
+    '''
     try:
-        im = Image.open(each_img)
-        border = (550, 50, 70, 990) # left, up, right, bottom
+        im = Image.fromarray(each_img)
         # CROP THE TIMESTAMP OUT
-        cropped_img = ImageOps.crop(im, border).resize((1600,200))
+        cropped_img = ImageOps.crop(im, kwargs['border']).resize((1600,200))
         P = np.array(cropped_img)
         P_mono = rgb2gray(P)
         
@@ -46,11 +88,10 @@ def read_text_from_images(each_img):
         text = pytesseract.image_to_string(Image.fromarray(input_im),
                                            config='digits')
         # calculate LED buld intensity:
-        led_border = (867,1020,40,30)
-        led_intensity = np.max(ImageOps.crop(im,led_border))
+        led_intensity = np.max(ImageOps.crop(im,kwargs['led_border']))
         return(text, led_intensity)
     except:
-         print('Failed reading' + 'file:' + each_img)
+         print('Failed reading' + 'file:')
          return(np.nan, np.nan)
     
 def separate_out(ts_and_intensity):
@@ -63,23 +104,21 @@ def separate_out(ts_and_intensity):
         intensity.append(brightness)
     return(timestamps, intensity)
 
-timestamp_and_intensity = map(read_text_from_images, images)
-timestamps, intensity = separate_out(timestamp_and_intensity)
-print(np.unique(timestamps))
-
-
-print('It took '+str(time.time()-start)+' seconds ro complete'+str(len(images))+' images')
-frame_date = pd.DataFrame(data=[], index=range(len(timestamps)), 
-                          columns=['clip_name','timestamp','filenames',
-                                   'led_intensity'])
-frame_date['clip_name'] = 'miaow'
-frame_date['filenames'] = images[:len(timestamps)]
-frame_date['timestamp']= timestamps
-frame_date['led_intensity'] = intensity
-frame_date.to_csv('manyJPGs_frametimes.csv')
+if __name__ == '__main__':
+    start = time.time()
+    video_path = 'video/OrlovaChukaDome_01_20180816_23.00.00-00.00.00[R][@f6b][1].avi'
+    kwargs={'':10,'led_border':(867,1020,40,30), 'border':(550, 50, 70, 990),
+            'max_numframes':2000}
+    ts, intensity = get_data_from_video(video_path, **kwargs)
+    df = pd.DataFrame(data=[], index=range(1,len(ts)+1), 
+                      columns=['frame_number','led_intensity',
+                               'timestamp','timestamp_verified'])
+    df['led_intensity'] = intensity
+    df['timestamp'] = ts
+    print('It took:', time.time()-start)
+    video_filename = os.path.split(video_path)[-1]
+    df.to_csv('LED_and_timestamp_'+video_filename+'_.csv')
+    
     
 
-cor = pd.read_csv('manyJPGs_frametimes_checked.csv')['corrected_timestamps'][:len(timestamps)]
-print(np.sum(cor!=frame_date['timestamp'].astype(str))/float(cor.shape[0]))
-
-
+    

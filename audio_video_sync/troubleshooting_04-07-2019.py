@@ -31,7 +31,7 @@ if __name__ == '__main__':
     file_paths = glob.glob(folder+'*.avi')
     video_path = file_paths[2]
     video_names = [os.path.split(each_video)[-1] for each_video in file_paths]
-    kwargs={'border':(550, 50, 70, 990), 'max_numframes':5}
+    kwargs={'border':(550, 50, 70, 990), 'print_frequency':100}
 #    
 #    
 #    frame_num = 180*25 + 27*25 
@@ -68,11 +68,12 @@ if __name__ == '__main__':
         df['led_intensity'] = intensity
         df['timestamp'] = ts
         saved_file_name = folder+'LED_and_timestamp_'+video_name
-        # save to pkl file just in case ! 
-        with open(saved_file_name+'.pkl', 'wb') as pklfile:
-            pickle.dump({'led_intensity':intensity, 'timestamp':ts}, pklfile)
-            
             
         print('It took:', time.time()-start)
-        
-        df.to_csv(saved_file_name+'.csv')
+        try:
+            df.to_csv(saved_file_name+'.csv',encoding = 'utf-8')
+            print('SAVING ' + video_name+' FAILED...NOW TRYING TO SAVE AS PKL FILE')
+        except:
+            # save to pkl file just in case ! 
+            with open(saved_file_name+'.pkl', 'wb') as pklfile:
+                pickle.dump({'led_intensity':intensity, 'timestamp':ts}, pklfile)

@@ -9,6 +9,7 @@ Created on Tue Jul  9 11:05:21 2019
 """
 import glob
 import os 
+import pickle
 import time
 
 import cv2
@@ -30,24 +31,23 @@ if __name__ == '__main__':
     file_paths = glob.glob(folder+'*.avi')
     video_path = file_paths[2]
     video_names = [os.path.split(each_video)[-1] for each_video in file_paths]
-    kwargs={'border':(550, 50, 70, 990)}
-    
-    
-    
-    frame_num = 180*25 + 27*25 
-    video = cv2.VideoCapture(video_path)
-    video.set(1, frame_num-1)
-    _ , frame = video.read()
-    
-    plt.figure(1)
-    plt.imshow(frame)
-    
-    plt.figure(2)
-    img = Image.fromarray(frame)
-    crop_img = ImageOps.crop(img, (425,800,944-440,1080-835))
-    plt.imshow(crop_img)
-    
-    
+    kwargs={'border':(550, 50, 70, 990), 'max_numframes':5}
+#    
+#    
+#    frame_num = 180*25 + 27*25 
+#    video = cv2.VideoCapture(video_path)
+#    video.set(1, frame_num-1)
+#    _ , frame = video.read()
+#    
+#    plt.figure(1)
+#    plt.imshow(frame)
+#    
+#    plt.figure(2)
+#    img = Image.fromarray(frame)
+#    crop_img = ImageOps.crop(img, (425,800,944-440,1080-835))
+#    plt.imshow(crop_img)
+#    
+#    
     
     
     led_borders_per_video = {}
@@ -67,5 +67,12 @@ if __name__ == '__main__':
                                    'timestamp','timestamp_verified'])
         df['led_intensity'] = intensity
         df['timestamp'] = ts
-        print('It took:', time.time()-start)        
-        df.to_csv(folder+'LED_and_timestamp_'+video_name+'_.csv')
+        saved_file_name = folder+'LED_and_timestamp_'+video_name
+        # save to pkl file just in case ! 
+        with open(saved_file_name+'.pkl', 'wb') as pklfile:
+            pickle.dump({'led_intensity':intensity, 'timestamp':ts}, pklfile)
+            
+            
+        print('It took:', time.time()-start)
+        
+        df.to_csv(saved_file_name+'.csv')

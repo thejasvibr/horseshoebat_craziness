@@ -27,20 +27,21 @@ from autoread_timestamps import get_data_from_video
 
 
 if __name__ == '__main__':
-    folder = '/media/tbeleyur/PEN_DRIVe/AV synchronisation experiment_4July2019/'
+    folder = '/media/tbeleyur/PEN_DRIVe/AV synchronisation experiment_4July2019/video/'
     file_paths = glob.glob(folder+'*.avi')
-    video_path = file_paths[2]
+    video_path = file_paths[1]
     video_names = [os.path.split(each_video)[-1] for each_video in file_paths]
     kwargs={'border':(550, 50, 70, 990), 'print_frequency':100}
 #    
 #    
-#    frame_num = 180*25 + 27*25 
-#    video = cv2.VideoCapture(video_path)
-#    video.set(1, frame_num-1)
-#    _ , frame = video.read()
-#    
-#    plt.figure(1)
-#    plt.imshow(frame)
+    frame_num = 9614
+    video = cv2.VideoCapture(video_path)
+    video.set(1, frame_num-1)
+    _ , frame = video.read()
+    
+    plt.figure(1)
+    plt.title('Frame number'+str(frame_num))
+    plt.imshow(frame)
 #    
 #    plt.figure(2)
 #    img = Image.fromarray(frame)

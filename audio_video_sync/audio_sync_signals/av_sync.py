@@ -91,34 +91,97 @@ def get_audio_sync_signal(sync_channel, min_durn=0.08,fs=250000, **kwargs):
     sorted_peaks = all_peaks[all_peaks_argsort]
     multiply_by_minus1 = np.isin(sorted_peaks, neg_peaks)
     sorted_peaks[multiply_by_minus1] *= -1 # tag the off with a -1 
-    
-    durations_proper = np.concatenate(( np.array([0]),sorted_peaks,np.array([sync.size])))
-    pulse_durations = np.diff( abs(durations_proper)) /float(fs)
-    cumulative_durations = np.cumsum(pulse_durations)
-    reassembled_signal = np.array([])    
 
-    all_pulses = []
-    for pulse_durn, peak_type, cuml_durn in zip(pulse_durations,
-                                                np.append(sorted_peaks,sorted_peaks[-1]),
-                                                          cumulative_durations):
-        if pulse_durn>=min_durn:
-            pulse = np.ones(int(pulse_durn*fs))*multiplyby(peak_type)
-        elif pulse_durn<=min_durn:
-            pulse = np.zeros(int(pulse_durn*fs))
-            
-        all_pulses.append(pulse)
+    # now go peak to peak and figure out if its on or off:
+    first_peak_is_rising = sorted_peaks[0] > 0
+    if first_peak_is_rising:
+        first_segment = np.zeros(abs(sorted_peaks[0]))
+    else:
+        first_segment = np.ones(abs(sorted_peaks[0]))
+    
+    many_segments = []
+    many_segments.append(first_segment)
+    for one_peak, adjacent_peak in zip(sorted_peaks[:-1],sorted_peaks[1:]):
+        pulse_is_on, length = get_pulse_state(one_peak, adjacent_peak)
+        pulse_segment = make_onoff_segment(pulse_is_on, length)
+        many_segments.append(pulse_segment)
         
-    # re-assmeble the signal after suppressing the very short pulses:
-    reassembled_signal = np.concatenate(all_pulses)
+    # check if the last peak:
+    last_peak_is_rising = sorted_peaks[-1] > 0
+    nsamples_lastsegment = int(sync.size - np.abs(sorted_peaks[-1]))
+    if last_peak_is_rising:
+        last_segment = np.ones(nsamples_lastsegment)
+    else:
+        last_segment = np.zeros(nsamples_lastsegment)
+    many_segments.append(last_segment)
+    
+        
+        
+    
+    
+#    
+#    durations_proper = np.concatenate(( np.array([0]),sorted_peaks,np.array([sync.size])))
+#    pulse_durations = np.diff( abs(durations_proper)) /float(fs)
+#    cumulative_durations = np.cumsum(pulse_durations)
+#    reassembled_signal = np.array([])    
+#
+#    all_pulses = []
+#    for pulse_durn, peak_type, cuml_durn in zip(pulse_durations,
+#                                                np.append(sorted_peaks,sorted_peaks[-1]),
+#                                                          cumulative_durations):
+#        if pulse_durn>=min_durn:
+#            pulse = np.ones(int(pulse_durn*fs))*multiplyby(peak_type)
+#        elif pulse_durn<=min_durn:
+#            pulse = np.zeros(int(pulse_durn*fs))
+#            
+#        all_pulses.append(pulse)
+#    # re-assmeble the signal after suppressing the very short pulses:
+    reassembled_signal = np.concatenate(many_segments)
     
     return(reassembled_signal)
+
+def get_pulse_state(index1, index2):
+    '''index1 and index2 are two integers
+    
+    Parameters
+    ---------
+    index1, index2 : integers
+                     index1 and index2 may be +ve or -ve depending on whether 
+                     they are rising peaks (+ve) - or dropping peaks (-ve)
+    Returns
+    ------
+    pulse_state: Boolean
+    
+    length : integer. 
+             the length of the pulse state
+    '''
+    length = np.diff(np.abs([index1,index2]))
+    
+    peak_types = tuple([each_peak >0 for each_peak in [index1, index2]])
+    pulse_state = pulse_state_dictionary[peak_types]
+    return(pulse_state, length)
+
+
+pulse_state_dictionary = {(True, False): True, (False,True): False}
+
+def make_onoff_segment(pulse_state_ison, length):
+    '''
+    '''
+    if pulse_state_ison:
+        return(np.ones(length))
+    else:
+        return(np.zeros(length))
+
 
 def video_sync_signal(vid_sync, fs=22.0):
     '''
     '''
 
 
-
+def figure_out_if_ONorOFF(first_peak, second_peak):
+    '''
+    '''
+    
 
 
 def multiplyby(peaktype):
@@ -138,28 +201,19 @@ def make_time_axis(X,fs=250000):
 
 
 if __name__ == '__main__':
-    audio_folder = 'Data_audio_HBC//'
-    wav_files = glob.glob(audio_folder+'*.WAV')
+    durns = np.arange(0.2, 2.0, 0.08)
+    ons=[];offs=[];
+    for  i in range(50):
+        ons.append(np.random.choice(durns,1))
+        offs.append(np.random.choice(durns,1))
     
-    # take first file 
-    start = time.time()
-    print('STARTING ALL SIGNAL ANALYSIS')
-    for each in wav_files:
-        filenum = each[-7:-4]
-        audio, fs = sf.read(each)
-        sync = audio[:,3]
-        corrected_sync = get_audio_sync_signal(sync, **{'parallel':True})        
-        np.save('corrected_sync'+filenum+'.npy',corrected_sync)
-        print('Now decimating...')
-#        decim_signal = corrected_sync.copy()
-#        for i in range(3):
-#            decim_signal = signal.resample(decim_signal,decim_signal.size/10)
-        
-#        np.save('decim_sync'+filenum+'.npy',decim_signal)
-#        print('Done with decimating' +str(filenum))
-     
-#    print(time.time()-start)
-#    plt.plot(make_time_axis(orig_sync),orig_sync, linewidth=2, alpha=0.5)
-#    plt.plot(make_time_axis(corr_sync), corr_sync)
-#    plt.xticks(np.arange(0,orig_sync.size/float(fs),0.2))
-#    
+    actual_LED_onoff = []
+    fs = 250000
+    for on,off in zip(ons,offs):
+        actual_LED_onoff.append(np.ones(int(on*fs)))
+        actual_LED_onoff.append(np.zeros(int(off*fs)))
+    
+    full_onoff = np.concatenate(actual_LED_onoff)
+    just_peaks = np.diff(full_onoff)
+    reconstr = get_audio_sync_signal(just_peaks, parallel=False)
+  

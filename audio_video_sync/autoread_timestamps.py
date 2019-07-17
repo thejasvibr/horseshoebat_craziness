@@ -29,19 +29,21 @@ def get_data_from_video(video_path, **kwargs):
     
     Keyword Argument
     
-    border = (550, 50, 70, 990) # left, up, right, bottom
+    timestamp_border = (550, 50, 70, 990) # left, up, right, bottom
     led_border = (867,1020,40,30)
-    max_numframes
+    end_frame : optional. End frame for reading the timestamp + LED signal
+    start_frame : optional. can get the timestamp reading to start from any arbitrary points
     '''
     video = cv2.VideoCapture(video_path)
-    numframes = get_numframes_to_iterate(video, **kwargs)
-        
-        
+
     print('starting frame reading')
     timestamps = []
     led_intensities = []
-    numframes = get_numframes_to_iterate(video, **kwargs)
-    for i in  range(1, numframes+1):
+    
+    start_frame = kwargs.get('start_frame',1)
+    end_frame = kwargs.get('end_frame', int(video.get(cv2.CAP_PROP_FRAME_COUNT))+1)    
+    video.set(1, start_frame)
+    for i in  range(start_frame, end_frame):
         successful, frame = video.read()
         if np.remainder(i,10)==0:
             print('reading '+str(i)+'th frame')
@@ -55,23 +57,13 @@ def get_data_from_video(video_path, **kwargs):
     print('Done with frame conversion')
     return(timestamps, led_intensities)
 
-def get_numframes_to_iterate(videocap, **kwargs):
-    if 'max_numframes' in kwargs.keys():
-        return(kwargs['max_numframes'])
-    else:
-        return(int(videocap.get(cv2.CAP_PROP_FRAME_COUNT)))
-        
-    
-
-
-
 def get_lamp_and_timestamp(each_img, **kwargs):
     '''
     '''
     try:
         im = Image.fromarray(each_img)
         # CROP THE TIMESTAMP OUT
-        cropped_img = ImageOps.crop(im, kwargs['border']).resize((1600,200))
+        cropped_img = ImageOps.crop(im, kwargs['timestamp_border']).resize((1600,200))
         P = np.array(cropped_img)
         P_mono = rgb2gray(P)
         
@@ -106,9 +98,17 @@ def separate_out(ts_and_intensity):
 
 if __name__ == '__main__':
     start = time.time()
-    video_path = 'video/OrlovaChukaDome_01_20180816_23.00.00-00.00.00[R][@f6b][1].avi'
-    kwargs={'':10,'led_border':(867,1020,40,30), 'border':(550, 50, 70, 990),
-            'max_numframes':2000}
+    video_path = 'video/DVRecorder_03_20190704_16.49.45-16.56.42[R][@da37][0].avi'
+    kwargs={'led_border':(414,800,490,240), 'timestamp_border':(550, 50, 70, 990),
+            'start_frame':2000,'end_frame':2500}
+        
+#    video = cv2.VideoCapture(video_path)
+#    video.set(1,3591)
+#    success, frame = video.read()
+#    plt.figure()
+#    plt.imshow(frame)
+    #    plt.ginput(n=4)
+        
     ts, intensity = get_data_from_video(video_path, **kwargs)
     df = pd.DataFrame(data=[], index=range(1,len(ts)+1), 
                       columns=['frame_number','led_intensity',
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     df['timestamp'] = ts
     print('It took:', time.time()-start)
     video_filename = os.path.split(video_path)[-1]
-    df.to_csv('LED_and_timestamp_'+video_filename+'_.csv')
+    df.to_csv('LED_and_timestamp_from2000_to2500_'+video_filename+'_.csv', encoding='utf-8')
     
     
 

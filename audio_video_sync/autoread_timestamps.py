@@ -50,15 +50,31 @@ def get_data_from_video(video_path, **kwargs):
         if not successful:
             frame = np.zeros((1080,944,3))
             print('Couldnt read frame number' + str(i))
+
         timestamp, intensity = get_lamp_and_timestamp(frame ,**kwargs)
         timestamps.append(timestamp)
-        led_intensities.append(intensity)
+        try:
+            led_intensities.append(float(intensity))
+        except ValueError:
+            print('Unable to read LED intensity at :', i)
 
     print('Done with frame conversion')
     return(timestamps, led_intensities)
 
 def get_lamp_and_timestamp(each_img, **kwargs):
     '''
+    
+    Keyword Arguments
+    ------------------
+    measure_led : function
+                  A custom function to measure the led intensity of
+                  the cropped patch. 
+                  Defaults to np.max if not given. 
+                  eg. if there are saturated patches and very dark patches in 
+                  and the led intensity tends to be somewhere in between 
+                  tracking the median value with np.median
+                  could show when the led goes on and 
+                  off. 
     '''
     try:
         im = Image.fromarray(each_img)
@@ -80,7 +96,8 @@ def get_lamp_and_timestamp(each_img, **kwargs):
         text = pytesseract.image_to_string(Image.fromarray(input_im),
                                            config='digits')
         # calculate LED buld intensity:
-        led_intensity = np.max(ImageOps.crop(im,kwargs['led_border']))
+        measure_led_intensity = kwargs.get('measure_led', np.max)
+        led_intensity = measure_led_intensity(ImageOps.crop(im,kwargs['led_border']))
         return(text, led_intensity)
     except:
          print('Failed reading' + 'file:')
@@ -98,9 +115,10 @@ def separate_out(ts_and_intensity):
 
 if __name__ == '__main__':
     start = time.time()
-    video_path = 'video/DVRecorder_03_20190704_16.49.45-16.56.42[R][@da37][0].avi'
+    #video_path = 'video/DVRecorder_03_20190704_16.49.45-16.56.42[R][@da37][0].avi'
+    video_path= '/media/tbeleyur/THEJASVI_DATA_BACKUP_3/fieldwork_2018_002/horseshoe_bat/video/Horseshoe_bat_2018-08/2018-08-19/cam01/OrlovaChukaDome_01_20180819_01.20.50-02.00.00[R][@3293][2].avi'
     kwargs={'led_border':(414,800,490,240), 'timestamp_border':(550, 50, 70, 990),
-            'start_frame':2000,'end_frame':2500}
+            'end_frame':50}
         
 #    video = cv2.VideoCapture(video_path)
 #    video.set(1,3591)
@@ -117,7 +135,7 @@ if __name__ == '__main__':
     df['timestamp'] = ts
     print('It took:', time.time()-start)
     video_filename = os.path.split(video_path)[-1]
-    df.to_csv('LED_and_timestamp_from2000_to2500_'+video_filename+'_.csv', encoding='utf-8')
+    df.to_csv('testing_'+video_filename+'_.csv', encoding='utf-8')
     
     
 

@@ -45,10 +45,18 @@ def get_syncdata_for_a_videofile(video_path,**kwargs):
     video_annotation : pandas DataFrame row with at least the following 
                        columns. 
                        video_path : full file path to the video file
+
+    Returns
+    --------
+    None 
+    
+    A side effect of this function is the csv which follows the naming
+    convention:
+        'videosync_{video_name_here}_.csv'
                  
     '''
     
-    intensity, timestamps = get_data_from_video(video_path, 
+    timestamps, intensity = get_data_from_video(video_path, 
                                                            **kwargs)
     df = pd.DataFrame(data=[], index=range(1,len(timestamps)+1), 
                       columns=['frame_number','led_intensity',
@@ -84,7 +92,7 @@ def get_data_from_video(video_path, **kwargs):
     video.set(1, start_frame)
     for i in  range(start_frame, end_frame):
         successful, frame = video.read()
-        if np.remainder(i,10)==0:
+        if np.remainder(i,50)==0:
             print('reading '+str(i)+'th frame')
         if not successful:
             frame = np.zeros((1080,944,3))
@@ -155,22 +163,20 @@ def get_lamp_and_timestamp(each_img, **kwargs):
 
 if __name__ == '__main__':
     df = pd.read_csv('DEV_file1.csv')
-    video_folder = '/media/tbeleyur/THEJASVI_DATA_BACKUP_3/fieldwork_2018_002/horseshoe_bat/video/Horseshoe_bat_2018-08/2018-08-16/cam01/'
+    #video_folder = '/media/tbeleyur/THEJASVI_DATA_BACKUP_3/fieldwork_2018_002/horseshoe_bat/video/Horseshoe_bat_2018-08/2018-08-16/cam01/'
+    video_folder = '../field_video/'
     filename = 'OrlovaChukaDome_01_20180816_23.00.00-00.00.00[R][@f6b][1].avi'
     df['video_path'] = video_folder+filename
+#
+#    df2 = df.copy()
+#    fname2 = 'OrlovaChukaDome_01_20180817_04.00.00-05.00.00[R][@2240][0].avi'
+#    df2['video_path'] = video_folder + fname2
 
-    df2 = df.copy()
-    fname2 = 'OrlovaChukaDome_01_20180817_04.00.00-05.00.00[R][@2240][0].avi'
-    df2['video_path'] = video_folder + fname2
-    
-    big_df = pd.concat((df, df2))
-    
     kwargs= {}
     kwargs['timestamp_border'] = (550, 50, 70, 990)
-    kwargs['led_border'] = (249, 898, 
-                            682, 167)
-    kwargs['end_frame'] = 20
+    kwargs['led_border'] = (874, 1025, 45, 38)
+    kwargs['end_frame'] = 7000
     video_path = video_folder+filename
-    generate_videodata_from_annotations(big_df, **kwargs)
+    generate_videodata_from_annotations(df, **kwargs)
 
 
